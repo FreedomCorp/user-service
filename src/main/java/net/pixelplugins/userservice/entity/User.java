@@ -4,13 +4,10 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import net.pixelplugins.userservice.model.type.Role;
-import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.userdetails.UserDetails;
 
 import javax.persistence.*;
-import java.util.Collection;
-import java.util.UUID;
+import java.util.ArrayList;
+import java.util.List;
 
 @NoArgsConstructor
 @AllArgsConstructor
@@ -25,8 +22,7 @@ public class User {
     private Long id;
 
     @Column
-    @Enumerated(EnumType.STRING)
-    private Role role;
+    private String role;
 
     @Column
     private String name;

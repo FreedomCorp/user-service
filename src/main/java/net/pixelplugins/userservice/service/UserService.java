@@ -1,57 +1,80 @@
 package net.pixelplugins.userservice.service;
 
 import lombok.AllArgsConstructor;
-import net.pixelplugins.userservice.dto.authentication.request.CreateUserRequest;
-import net.pixelplugins.userservice.dto.profile.response.UserDetailsResponse;
+
+import net.pixelplugins.userservice.dto.request.CreateUserRequest;
+import net.pixelplugins.userservice.dto.request.MatchUserPasswordRequest;
+import net.pixelplugins.userservice.dto.request.UpdateUserRequest;
+import net.pixelplugins.userservice.dto.response.ReadUserResponse;
+import net.pixelplugins.userservice.dto.response.ValueCheckResponse;
 import net.pixelplugins.userservice.entity.User;
-import net.pixelplugins.userservice.exception.EmailAlreadyRegisteredException;
 import net.pixelplugins.userservice.exception.UserNotFoundException;
 import net.pixelplugins.userservice.exception.UsernameAlreadyRegisteredException;
-import net.pixelplugins.userservice.model.UserModel;
-import net.pixelplugins.userservice.model.type.Role;
 import net.pixelplugins.userservice.repository.UserRepository;
 
-import net.pixelplugins.userservice.util.JWTUtil;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 @AllArgsConstructor
 @Service
-public class UserService implements UserDetailsService {
+public class UserService {
 
     private final UserRepository repository;
-    private final JWTUtil jwt;
+    private final PasswordEncoder passwordEncoder;
 
-    public UserDetailsResponse findByUsername(String username) throws UserNotFoundException {
+    public ReadUserResponse create(CreateUserRequest request) throws UsernameAlreadyRegisteredException {
+        if (repository.existsByUsername(request.getUsername())) {
+            throw new UsernameAlreadyRegisteredException();
+        }
+
+        var user = repository.save(User.builder()
+                .name(request.getName())
+                .username(request.getUsername())
+                .email(request.getEmail())
+                .password(passwordEncoder.encode(request.getPassword()))
+                .role("ROLE_USER").build());
+
+        return new ReadUserResponse(user);
+    }
+
+    public ValueCheckResponse existsByUsername(String username) {
+        return new ValueCheckResponse(repository.existsByUsername(username));
+    }
+
+    public ReadUserResponse findById(long id) throws UserNotFoundException {
+        return new ReadUserResponse(repository.findById(id)
+                .orElseThrow(UserNotFoundException::new));
+    }
+
+    public ReadUserResponse findByUsername(String username) throws UserNotFoundException {
+        return new ReadUserResponse(repository.findByUsername(username)
+                .orElseThrow(UserNotFoundException::new));
+    }
+
+    public ReadUserResponse update(UpdateUserRequest request) throws UserNotFoundException {
+        var user = repository.findByUsername(request.getUsername())
+                .orElseThrow(UserNotFoundException::new);
+
+        user.setName(request.getName());
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
+
+        return new ReadUserResponse(repository.save(user));
+    }
+
+    public ValueCheckResponse match(String username, String password) throws UserNotFoundException {
+        var user = repository.findByUsername(username)
+                .orElseThrow(UserNotFoundException::new);
+
+        return new ValueCheckResponse((passwordEncoder.matches(password, user.getPassword())));
+    }
+
+    public ValueCheckResponse match(MatchUserPasswordRequest request) throws UserNotFoundException {
+        return match(request.getUsername(), request.getPassword());
+    }
+
+    public String findPasswordByUsername(String username) throws UserNotFoundException {
         return repository.findByUsername(username)
-                .map(user -> new UserDetailsResponse(user.getId(), user.getName(), user.getUsername(), user.getEmail(), user.getPassword()))
-                .orElseThrow(UserNotFoundException::new);
-    }
-
-    public UserDetailsResponse findByToken(String token) throws UserNotFoundException {
-        return findByUsername(jwt.findUsernameByToken(token));
-    }
-
-    public UserDetailsResponse findByEmail(String email) throws UserNotFoundException {
-        return repository.findByEmail(email)
-                .map(user -> new UserDetailsResponse(user.getId(), user.getName(), user.getUsername(), user.getEmail(), user.getPassword()))
-                .orElseThrow(UserNotFoundException::new);
-    }
-
-    public UserDetailsResponse findById(long id) throws UserNotFoundException {
-        return repository.findById(id)
-                .map(user -> new UserDetailsResponse(user.getId(), user.getName(), user.getUsername(), user.getEmail(), user.getPassword()))
-                .orElseThrow(UserNotFoundException::new);
-    }
-
-    @Override
-    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        return repository.findByUsername(username)
-                .map(UserModel::new)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found with username: " + username));
+                .orElseThrow(UserNotFoundException::new)
+                .getPassword();
     }
 }
